@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Skin Tan Tracker - CIELAB & CIEDE2000 Analysis</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Chart.js for responsive client-side progress charts -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <header class="app-header">
+        <div class="header-brand">
+            <h1>Skin Tan Tracker</h1>
+            <span class="badge">Relative Colorimetry</span>
+        </div>
+        <div class="header-actions">
+            <button id="theme-toggle" class="icon-btn" aria-label="Toggle Theme">🌙</button>
+            <button id="help-btn" class="icon-btn" aria-label="Instructions">ℹ️</button>
+        </div>
+    </header>
+
+    <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+        <button class="tab-btn" data-tab="capture">Capture & ROI</button>
+        <button class="tab-btn" data-tab="history">History</button>
+        <button class="tab-btn" data-tab="settings">Settings & Guide</button>
+    </nav>
+
+    <main class="app-container">
+        <!-- DASHBOARD TAB -->
+        <section id="dashboard" class="tab-content active">
+            <div class="card area-selector-card">
+                <label for="active-body-area">Target Body Area:</label>
+                <select id="active-body-area">
+                    <option value="Forearm">Forearm</option>
+                    <option value="Face">Face</option>
+                    <option value="Neck">Neck</option>
+                    <option value="Hand">Hand</option>
+                </select>
+                <button id="set-baseline-btn" class="btn secondary">Set Current as Baseline</button>
+            </div>
+
+            <div class="dashboard-grid">
+                <!-- Baseline Card -->
+                <div class="card">
+                    <h3>Baseline Reference</h3>
+                    <div id="baseline-display" class="empty-state">No baseline set for this area.</div>
+                    <div class="lab-readout" id="baseline-lab-readout" style="display:none;">
+                        <div class="swatch" id="baseline-swatch"></div>
+                        <div class="values">
+                            <span id="base-l">L*: --</span>
+                            <span id="base-a">a*: --</span>
+                            <span id="base-b">b*: --</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Latest Measurement Card -->
+                <div class="card">
+                    <h3>Latest Measurement</h3>
+                    <div id="latest-display" class="empty-state">No measurements recorded yet.</div>
+                    <div class="lab-readout" id="latest-lab-readout" style="display:none;">
+                        <div class="swatch" id="latest-swatch"></div>
+                        <div class="values">
+                            <span id="lat-l">L*: --</span>
+                            <span id="lat-a">a*: --</span>
+                            <span id="lat-b">b*: --</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Delta E Card -->
+                <div class="card full-width delta-card">
+                    <h3>Color Difference (CIEDE2000 $\Delta E_{00}$)</h3>
+                    <div class="delta-value-container">
+                        <span id="delta-e-value" class="delta-number">--</span>
+                        <div id="delta-interpretation" class="delta-desc">Take a measurement to compare against your baseline.</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quality Warning Banner -->
+            <div id="quality-banner" class="warning-banner hidden">
+                <strong>Measurement Quality Warning:</strong> <span id="quality-reason">--</span>
+            </div>
+
+            <!-- Progress Chart Card -->
+            <div class="card chart-card">
+                <h3>Color Progression Over Time ($L^*, a^*, b^*, \Delta E_{00}$)</h3>
+                <div class="chart-wrapper">
+                    <canvas id="progress-chart"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <!-- CAPTURE & ROI TAB -->
+        <section id="capture" class="tab-content">
+            <div class="card capture-card">
+                <h3>Image Acquisition</h3>
+                <div class="capture-controls">
+                    <button id="start-camera-btn" class="btn primary">Open Camera</button>
+                    <label for="file-upload" class="btn secondary upload-label">
+                        Upload Photo <input type="file" id="file-upload" accept="image/*" hidden>
+                    </label>
+                </div>
+
+                <!-- Live Camera Viewport -->
+                <div id="camera-container" class="hidden">
+                    <video id="camera-feed" autoplay playsinline></video>
+                    <button id="capture-snapshot-btn" class="btn primary capture-shutter">Capture Frame</button>
+                    <button id="close-camera-btn" class="btn danger">Close Camera</button>
+                </div>
+
+                <!-- ROI Selection Canvas Wrapper -->
+                <div id="canvas-workspace" class="hidden">
+                    <p class="instruction-text">Drag or tap an area on the image to select your skin Region of Interest (ROI).</p>
+                    <div class="canvas-scroll-container">
+                        <canvas id="roi-canvas"></canvas>
+                    </div>
+                    <div class="roi-actions">
+                        <button id="confirm-roi-btn" class="btn primary">Analyze Selected ROI</button>
+                        <button id="cancel-roi-btn" class="btn secondary">Retake / Re-upload</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Capture Notes Form -->
+            <div class="card hidden" id="analysis-result-card">
+                <h3>Current Capture Analysis</h3>
+                <div class="live-stats">
+                    <p><strong>Sampled Pixels:</strong> <span id="stat-pixels">0</span></p>
+                    <p><strong>Estimated Lighting State:</strong> <span id="stat-lighting">Normal</span></p>
+                </div>
+                <div class="form-group">
+                    <label for="capture-notes">Capture Notes (Lighting, Time of Day, Skin Condition):</label>
+                    <textarea id="capture-notes" placeholder="e.g., Indoor indirect LED light, morning, skin clean and dry."></textarea>
+                </div>
+                <button id="save-measurement-btn" class="btn primary full-width">Save Measurement Record</button>
+            </div>
+        </section>
+
+        <!-- HISTORY TAB -->
+        <section id="history" class="tab-content">
+            <div class="card">
+                <div class="history-header">
+                    <h3>Measurement Records</h3>
+                    <button id="export-json-btn" class="btn secondary small">Export JSON</button>
+                </div>
+                <div class="table-responsive">
+                    <table id="history-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Area</th>
+                                <th>L*</th>
+                                <th>a*</th>
+                                <th>b*</th>
+                                <th>$\Delta E_{00}$</th>
+                                <th>Notes</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-tbody">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="history-empty" class="empty-state">No recorded history available.</div>
+            </div>
+        </section>
+
+        <!-- SETTINGS & GUIDE TAB -->
+        <section id="settings" class="tab-content">
+            <div class="card">
+                <h3>Measurement Best Practices</h3>
+                <ul class="best-practices-list">
+                    <li><strong>Consistent Environment:</strong> Always photograph indoors under diffuse, indirect ambient light. Avoid direct sunlight, bright window glare, or camera flashes.</li>
+                    <li><strong>Fixed Geometry:</strong> Keep the camera at an identical distance and angle relative to your skin.</li>
+                    <li><strong>Clean Surface:</strong> Ensure the skin is clean, dry, and free of sweat, sunscreen, or cosmetics that alter specular reflection.</li>
+                    <li><strong>No Filters:</strong> Ensure phone beauty modes, AI enhancements, and color filters are strictly disabled.</li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>Scientific Disclaimer</h3>
+                <p>This tool measures <strong>relative, camera-dependent visible skin color changes</strong> over time using standardized CIELAB color space and CIEDE2000 color difference formulas ($\Delta E_{00}$).</p>
+                <p class="warning-text"><strong>It does NOT measure melanin concentration, pigmentation depth, or absolute tanning percentages.</strong> Mobile phone cameras dynamically adjust white balance, exposure, and tone mapping across captures, meaning apparent color shifts can stem from lighting or sensor processing rather than biological pigment changes.</p>
+            </div>
+
+            <div class="card danger-zone">
+                <h3>Data Management</h3>
+                <p>All data is stored locally in your browser via LocalStorage. No data is transmitted externally.</p>
+                <div class="danger-actions">
+                    <button id="clear-all-data-btn" class="btn danger">Clear All Stored Data</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Help Modal -->
+    <div id="help-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>How to Use Skin Tan Tracker</h3>
+            <ol>
+                <li>Select your target body area (Forearm, Face, etc.) on the Dashboard.</li>
+                <li>Go to the <strong>Capture & ROI</strong> tab and open your camera or upload a clear photo.</li>
+                <li>Select a uniform skin patch on the preview canvas, avoiding hair, moles, or shadows.</li>
+                <li>Review the extracted $L^*a^*b^*$ values and quality score, add notes, and save.</li>
+                <li>Track your CIEDE2000 ($\Delta E_{00}$) color difference progression over days on the dashboard chart.</li>
+            </ol>
+            <button id="close-modal-btn" class="btn primary">Got it</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+                              </html>
+                      
